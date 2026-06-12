@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SRISIAM Waves Scanner</title>
+<style>
+  :root{
+    --bg:#0d1117; --panel:#161b22; --border:#30363d; --text:#e6edf3; --dim:#8b949e;
+    --green:#3fb950; --red:#f85149; --yellow:#d29922; --blue:#58a6ff; --purple:#bc8cff; --pink:#ff7b72;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--text);font-family:'Segoe UI',Tahoma,sans-serif;padding:16px 20px}
+  header{display:flex;flex-wrap:wrap;gap:12px;align-items:center;margin-bottom:14px}
+  h1{font-size:20px;letter-spacing:.5px}
+  h1 .wave{color:var(--blue)}
+  .sub{color:var(--dim);font-size:12px;width:100%}
+  select,button{background:var(--panel);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:6px 10px;font-size:13px;cursor:pointer}
+  button:hover{border-color:var(--blue)}
+  .meta{color:var(--dim);font-size:12px;margin-left:auto}
+  .filters{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px}
+  .chip{padding:5px 12px;border-radius:14px;border:1px solid var(--border);background:var(--panel);font-size:12px;cursor:pointer;user-select:none}
+  .chip.active{background:#1f6feb33;border-color:var(--blue);color:var(--blue)}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(330px,1fr));gap:12px}
+  .card{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:12px 14px}
+  .card .top{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+  .sym{font-weight:700;font-size:15px}
+  .sym a{color:var(--text);text-decoration:none}
+  .sym a:hover{color:var(--blue)}
+  .side{font-size:11px;font-weight:700;padding:2px 8px;border-radius:4px}
+  .side.LONG{background:#3fb95022;color:var(--green)}
+  .side.SHORT{background:#f8514922;color:var(--red)}
+  .stage{font-size:11px;font-weight:600;padding:2px 8px;border-radius:4px;margin-left:auto}
+  .stage.ENTRY{background:#d2992233;color:var(--yellow)}
+  .stage.CHOCH{background:#58a6ff26;color:var(--blue)}
+  .stage.RUN{background:#bc8cff26;color:var(--purple)}
+  .stage.BREAK{background:#ff7b7226;color:var(--pink)}
+  .stage.DIV{background:#8b949e26;color:var(--dim)}
+  .stage.M3{background:#3fb95026;color:var(--green)}
+  .info{font-size:12px;color:var(--dim);margin-bottom:8px;line-height:1.5}
+  table.kv{width:100%;font-size:12px;border-collapse:collapse}
+  table.kv td{padding:2px 0;color:var(--dim)}
+  table.kv td:last-child{text-align:right;color:var(--text);font-variant-numeric:tabular-nums}
+  .hl{color:var(--yellow)!important;font-weight:600}
+  .g{color:var(--green)!important} .r{color:var(--red)!important} .b{color:var(--blue)!important} .p{color:var(--purple)!important}
+  .empty{color:var(--dim);padding:40px;text-align:center;width:100%}
+  .err{color:var(--red);padding:20px;text-align:center}
+  .chartbtn{margin-left:6px;font-size:11px;padding:2px 8px;border-radius:4px;border:1px solid var(--border);background:transparent;color:var(--blue)}
+  .chartbtn:hover{background:#1f6feb22}
+  /* ---- chart modal ---- */
+  #modal{position:fixed;inset:0;background:#000a;display:none;align-items:center;justify-content:center;z-index:50}
+  #modal.open{display:flex}
+  .mbox{background:var(--panel);border:1px solid var(--border);border-radius:12px;width:min(1100px,96vw);max-height:94vh;display:flex;flex-direction:column;overflow:hidden}
+  .mhead{display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--border)}
+  .mhead .t{font-weight:700;font-size:15px}
+  .mhead .s{color:var(--dim);font-size:12px}
+  .mhead .x{margin-left:auto;cursor:pointer;border:none;background:transparent;color:var(--dim);font-size:18px}
+  .mhead .x:hover{color:var(--text)}
+  #chMain{height:430px}
+  #chRsi{height:110px;border-top:1px solid var(--border)}
+  .mlegend{padding:8px 14px;font-size:11px;color:var(--dim);display:flex;gap:14px;flex-wrap:wrap}
+  .lg{display:inline-flex;align-items:center;gap:5px}
+  .sw{width:14px;height:3px;border-radius:2px;display:inline-block}
+  .legend{margin-top:18px;border-top:1px solid var(--border);padding-top:10px;color:var(--dim);font-size:11px;line-height:1.8}
+</style>
+</head>
+<body>
+<header>
+  <h1>🌊 SRISIAM <span class="wave">WAVES</span> Scanner</h1>
+  <select id="tf">
+    <option value="1h">TF 1h</option>
+    <option value="2h">TF 2h</option>
+    <option value="4h" selected>TF 4h ✦ แนะนำ</option>
+    <option value="6h">TF 6h</option>
+    <option value="12h">TF 12h</option>
+    <option value="1d">TF 1D</option>
+  </select>
+  <select id="top">
+    <option value="30">Top 30</option>
+    <option value="50" selected>Top 50</option>
+    <option value="80">Top 80</option>
+    <option value="120">Top 120</option>
+  </select>
+  <button id="refresh">🔄 สแกน</button>
+  <span class="meta" id="meta"></span>
+  <div class="sub">3 Swings + ท่ามาตรฐาน + 100 of A + ความแรง Divergence · ข้อมูล Binance · คลิกชื่อเหรียญเปิด TradingView</div>
+</header>
+
+<div class="filters" id="filters">
+  <span class="chip active" data-f="ALL">ทั้งหมด</span>
+  <span class="chip" data-f="ENTRY">⚡ Entry zone</span>
+  <span class="chip" data-f="CHOCH">Choch รอ retrace</span>
+  <span class="chip" data-f="RUN">วิ่งหา M3</span>
+  <span class="chip" data-f="BREAK">หลุดเทรนด์ไลน์</span>
+  <span class="chip" data-f="DIV">Divergence</span>
+  <span class="chip" data-f="LONG">LONG</span>
+  <span class="chip" data-f="SHORT">SHORT</span>
+</div>
+
+<div class="grid" id="grid"><div class="empty">กำลังสแกน…</div></div>
+
+<div id="modal">
+  <div class="mbox">
+    <div class="mhead">
+      <span class="t" id="mTitle"></span>
+      <span class="s" id="mSub"></span>
+      <button class="x" id="mClose">✕</button>
+    </div>
+    <div id="chMain"></div>
+    <div id="chRsi"></div>
+    <div class="mlegend">
+      <span class="lg"><span class="sw" style="background:#8b949e"></span>Trendline 2-4</span>
+      <span class="lg"><span class="sw" style="background:#58a6ff"></span>Choch / Flip (จุด 4)</span>
+      <span class="lg"><span class="sw" style="background:#d29922"></span>โซน Entry 38.2–78.6%</span>
+      <span class="lg"><span class="sw" style="background:#bc8cff"></span>เป้า M3</span>
+      <span class="lg"><span class="sw" style="background:#f85149"></span>เส้น Divergence (ราคา + RSI)</span>
+    </div>
+  </div>
+</div>
+
+<div class="legend">
+  <b>ขั้นตอนตามคู่มือ:</b>
+  ① จบเทรนด์ด้วย Trend line 2-4 (หลุดเส้น + Choch ปิดเต็มแท่ง) ·
+  ② RSI Regular Divergence — วัดความแรงจาก Fib ext ของ sideway: ≥138.2% ปานกลาง / ≥161.8% แรง ·
+  ③ Entry ท่ามาตรฐาน: Choch → retrace (Flip จุด 4 / Fib 38.2–78.6%) ·
+  ④ TP จาก 100 of A — แบบที่ 1: Div แรง+รีเทสตื้น → M3 161.8–200% · แบบที่ 2: Div แรง+รีเทสลึก → 138.2–161.8% · แบบที่ 3: Div กลาง+รีเทสตื้น → 100–138.2% · แบบที่ 4: Div กลาง+รีเทสลึก → 100% ของ M1
+</div>
+
+<script src="https://unpkg.com/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js"></script>
+<script>
+let DATA = null, FILTER = 'ALL';
+
+function fmt(v){
+  if(v==null) return '–';
+  if(Math.abs(v)>=1000) return v.toLocaleString('en-US',{maximumFractionDigits:2});
+  if(Math.abs(v)>=1) return v.toLocaleString('en-US',{maximumFractionDigits:4});
+  return v.toPrecision(4);
+}
+function stageTH(s){
+  return {ENTRY:'⚡ ENTRY',CHOCH:'CHOCH ✓',RUN:'RUN → M3',BREAK:'BREAK TL',DIV:'DIV',M3:'🎯 M3'}[s]||s;
+}
+
+function card(r){
+  const dirIcon = r.side==='LONG'?'🟢':'🔴';
+  const divCls = r.divStrength==='แรง'?'g':(r.divStrength==='ปานกลาง'?'b':'');
+  let rows = `
+    <tr><td>ราคา</td><td>${fmt(r.price)} <span class="${r.change24h>=0?'g':'r'}">(${r.change24h>0?'+':''}${r.change24h?.toFixed(1)}%)</span></td></tr>
+    <tr><td>Divergence (RSI ${r.rsi.r3} → ${r.rsi.r5}${r.rsi.obos?' · OB/OS ✓':''})</td><td class="${divCls}">${r.divExt}% — ${r.divStrength}</td></tr>
+    <tr><td>จุด (3) / (4) / (5)</td><td>${fmt(r.points.p3)} / ${fmt(r.points.p4)} / ${fmt(r.points.p5)}</td></tr>
+    <tr><td>Choch level (จุด 4)</td><td>${fmt(r.chochLevel)}</td></tr>`;
+  if(r.stage==='DIV'||r.stage==='BREAK'){
+    rows += `<tr><td>Trendline 2-4 ตอนนี้</td><td>${fmt(r.trendlineNow)}</td></tr>`;
+    if(r.internalLow!=null) rows += `<tr><td>Internal swing (Choch ย่อย)</td><td>${fmt(r.internalLow)}</td></tr>`;
+  }
+  if(r.m1){
+    rows += `<tr><td>M1 (สวิงแรกหลัง Choch)</td><td>${fmt(r.m1.low)} ↔ ${fmt(r.m1.high)}</td></tr>`;
+    if(r.m2) rows += `<tr><td>M2 retrace</td><td class="${r.m2.retracePct<=38.2?'g':r.m2.retracePct<=50?'b':'r'}">${r.m2.retracePct}%</td></tr>`;
+    rows += `<tr><td>โซน Entry (Fib 38.2–78.6)</td><td class="hl">${fmt(r.entryZone.lo)} – ${fmt(r.entryZone.hi)}</td></tr>`;
+    rows += `<tr><td>เป้า M3 (${r.m3.pctLo}–${r.m3.pctHi}% of M1)</td><td class="p">${fmt(r.m3.lo)} → ${fmt(r.m3.hi)}</td></tr>`;
+  }
+  rows += `<tr><td>อายุ setup (แท่งจากจุด 5)</td><td>${r.barsSinceP5}</td></tr>`;
+  return `<div class="card">
+    <div class="top">
+      <span class="sym">${dirIcon} <a href="${r.tv}" target="_blank" title="เปิดกราฟ TradingView">${r.symbol.replace('USDT','')}</a></span>
+      <button class="chartbtn" onclick="openChart('${r.symbol}')">📈 กราฟ</button>
+      <span class="side ${r.side}">${r.side}</span>
+      <span class="stage ${r.stage}">${stageTH(r.stage)}</span>
+    </div>
+    <div class="info">${r.stageInfo}${r.m3&&r.stage!=='DIV'&&r.stage!=='BREAK'?' · '+r.m3.form:''}</div>
+    <table class="kv">${rows}</table>
+  </div>`;
+}
+
+function render(){
+  const g = document.getElementById('grid');
+  if(!DATA){ g.innerHTML = '<div class="empty">กำลังสแกน…</div>'; return; }
+  let list = DATA.results;
+  if(FILTER==='LONG'||FILTER==='SHORT') list = list.filter(r=>r.side===FILTER);
+  else if(FILTER!=='ALL') list = list.filter(r=>r.stage===FILTER || (FILTER==='RUN'&&r.stage==='M3'));
+  g.innerHTML = list.length ? list.map(card).join('') : '<div class="empty">ไม่พบ setup ในกลุ่มนี้</div>';
+  document.getElementById('meta').textContent =
+    `สแกน ${DATA.scanned} เหรียญ · พบ ${DATA.found} setup · ${new Date(DATA.time).toLocaleTimeString('th-TH')}`;
+}
+
+async function load(){
+  const tf = document.getElementById('tf').value;
+  const top = document.getElementById('top').value;
+  document.getElementById('meta').textContent = 'กำลังสแกน…';
+  try{
+    const res = await fetch(`/api/scan?tf=${tf}&top=${top}`);
+    DATA = await res.json();
+    if(DATA.error) throw new Error(DATA.error);
+    render();
+  }catch(e){
+    document.getElementById('grid').innerHTML = `<div class="err">โหลดไม่สำเร็จ: ${e.message}</div>`;
+  }
+}
+
+// ================= Chart modal — ตีเส้นตามกลยุทธ์ =================
+let charts = null;
+function destroyCharts(){
+  if(charts){ charts.main.remove(); charts.rsi.remove(); charts = null; }
+  document.getElementById('chMain').innerHTML = '';
+  document.getElementById('chRsi').innerHTML = '';
+}
+function closeModal(){ document.getElementById('modal').classList.remove('open'); destroyCharts(); }
+document.getElementById('mClose').onclick = closeModal;
+document.getElementById('modal').onclick = e => { if(e.target.id==='modal') closeModal(); };
+
+async function openChart(symbol){
+  const tf = document.getElementById('tf').value;
+  const modal = document.getElementById('modal');
+  modal.classList.add('open');
+  document.getElementById('mTitle').textContent = `🌊 ${symbol.replace('USDT','')} · ${tf.toUpperCase()}`;
+  document.getElementById('mSub').textContent = 'กำลังโหลด…';
+  destroyCharts();
+
+  let d;
+  try{
+    d = await fetch(`/api/chart?symbol=${symbol}&tf=${tf}`).then(r=>r.json());
+    if(d.error) throw new Error(d.error);
+  }catch(e){
+    document.getElementById('mSub').textContent = 'โหลดไม่สำเร็จ: ' + e.message;
+    return;
+  }
+  const a = d.analysis;
+  document.getElementById('mSub').textContent = a
+    ? `${a.side} · Div ${a.divExt}% (${a.divStrength}) · ${a.stageInfo}`
+    : 'ไม่พบ setup ตามกลยุทธ์ในตอนนี้';
+
+  const baseOpts = {
+    layout:{ background:{color:'#161b22'}, textColor:'#8b949e', fontSize:11 },
+    grid:{ vertLines:{color:'#21262d'}, horzLines:{color:'#21262d'} },
+    timeScale:{ timeVisible:true, secondsVisible:false, borderColor:'#30363d' },
+    rightPriceScale:{ borderColor:'#30363d' },
+    crosshair:{ mode:0 },
+  };
+  const main = LightweightCharts.createChart(document.getElementById('chMain'), baseOpts);
+  const rsiCh = LightweightCharts.createChart(document.getElementById('chRsi'), baseOpts);
+  charts = { main, rsi: rsiCh };
+
+  const candles = d.candles.map(c => ({ time: Math.floor(c.time/1000), open:c.open, high:c.high, low:c.low, close:c.close }));
+  const T = i => candles[i].time;
+  const cs = main.addCandlestickSeries({ upColor:'#3fb950', downColor:'#f85149', borderVisible:false, wickUpColor:'#3fb950', wickDownColor:'#f85149' });
+  cs.setData(candles);
+
+  const rs = rsiCh.addLineSeries({ color:'#e6edf3', lineWidth:1, lastValueVisible:false, priceLineVisible:false });
+  rs.setData(d.rsi.map((v,i) => v==null ? null : { time:candles[i].time, value:v }).filter(Boolean));
+  rs.createPriceLine({ price:70, color:'#f8514966', lineWidth:1, lineStyle:2, title:'70' });
+  rs.createPriceLine({ price:30, color:'#3fb95066', lineWidth:1, lineStyle:2, title:'30' });
+
+  if(a && a.idx){
+    const I = a.idx, P = a.points, isShort = a.side==='SHORT';
+    const ln = (color,width,style) => main.addLineSeries({ color, lineWidth:width, lineStyle:style, lastValueVisible:false, priceLineVisible:false, crosshairMarkerVisible:false });
+
+    // ----- Trendline 2-4 (ลากต่อถึงแท่งสุดท้าย) -----
+    const slope = (P.p4 - P.p2) / (I.p4 - I.p2);
+    const lastI = candles.length - 1;
+    ln('#8b949e',1,1).setData([ {time:T(I.p2), value:P.p2}, {time:T(lastI), value:P.p2 + slope*(lastI - I.p2)} ]);
+
+    // ----- เส้น Divergence บนราคา (3)→(5) และบน RSI -----
+    ln('#f85149',2,0).setData([ {time:T(I.p3), value:P.p3}, {time:T(I.p5), value:P.p5} ]);
+    const dvr = rsiCh.addLineSeries({ color:'#f85149', lineWidth:2, lastValueVisible:false, priceLineVisible:false, crosshairMarkerVisible:false });
+    dvr.setData([ {time:T(I.p3), value:a.rsi.r3}, {time:T(I.p5), value:a.rsi.r5} ]);
+
+    // ----- เส้นระดับ: Choch/Flip, Entry zone, M3 -----
+    cs.createPriceLine({ price:a.chochLevel, color:'#58a6ff', lineWidth:1, lineStyle:2, title:'Choch / Flip (4)' });
+    if(a.entryZone){
+      cs.createPriceLine({ price:a.entryZone.lo, color:'#d29922', lineWidth:1, lineStyle:2, title:'Entry 38.2%' });
+      cs.createPriceLine({ price:a.entryZone.hi, color:'#d29922', lineWidth:1, lineStyle:2, title:'Entry 78.6%' });
+    }
+    if(a.m3){
+      cs.createPriceLine({ price:a.m3.lo, color:'#bc8cff', lineWidth:2, lineStyle:0, title:`M3 ${a.m3.pctLo}%` });
+      if(a.m3.hi !== a.m3.lo) cs.createPriceLine({ price:a.m3.hi, color:'#bc8cff', lineWidth:1, lineStyle:2, title:`M3 ${a.m3.pctHi}%` });
+    }
+
+    // ----- markers จุด (2)(3)(4)(5) + M1/M2 -----
+    const mk = (i,label,above,color='#d29922') => ({ time:T(i), position:above?'aboveBar':'belowBar', color, shape:above?'arrowDown':'arrowUp', text:label });
+    const markers = [
+      mk(I.p2,'(2)', !isShort), mk(I.p3,'(3)', isShort), mk(I.p4,'(4)', !isShort), mk(I.p5,'(5)', isShort),
+    ];
+    if(I.m1 != null) markers.push(mk(I.m1,'M1', !isShort, '#bc8cff'));
+    if(I.m2 != null) markers.push(mk(I.m2,'M2', isShort, '#bc8cff'));
+    markers.sort((x,y) => x.time - y.time);
+    cs.setMarkers(markers);
+  }
+
+  // sync แกนเวลา 2 กราฟ
+  let syncing = false;
+  const sync = (from,to) => from.timeScale().subscribeVisibleLogicalRangeChange(r => {
+    if(syncing || !r) return; syncing = true; to.timeScale().setVisibleLogicalRange(r); syncing = false;
+  });
+  sync(main, rsiCh); sync(rsiCh, main);
+  if(a && a.idx){
+    // zoom เข้าบริเวณ setup: ก่อนจุด (2) เล็กน้อย ถึงเลยแท่งสุดท้าย
+    main.timeScale().setVisibleLogicalRange({ from: Math.max(a.idx.p2 - 15, 0), to: candles.length + 8 });
+  } else {
+    main.timeScale().fitContent();
+  }
+}
+
+document.getElementById('refresh').onclick = load;
+document.getElementById('tf').onchange = load;
+document.getElementById('top').onchange = load;
+document.getElementById('filters').onclick = e=>{
+  const c = e.target.closest('.chip'); if(!c) return;
+  document.querySelectorAll('.chip').forEach(x=>x.classList.remove('active'));
+  c.classList.add('active'); FILTER = c.dataset.f; render();
+};
+load();
+setInterval(load, 90_000);
+</script>
+</body>
+</html>
