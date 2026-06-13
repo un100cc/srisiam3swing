@@ -51,15 +51,15 @@ function zigzag(piv) {
   return z;
 }
 
-// rsi ที่จุด pivot — เอาค่าสุดขั้วรอบ ๆ ±2 แท่ง กัน lag
+// rsi ที่จุด pivot — ใช้ค่า "ที่แท่ง pivot จริง" (±1 เฉพาะกรณีค่า null)
+// หมายเหตุ: ห้ามกวาด window กว้างแล้วเอา max/min — จะคว้าค่า spike ข้างเคียงสร้าง divergence ปลอม
 function rsiAt(rsiArr, i, t) {
-  let v = null;
-  for (let j = Math.max(0, i - 2); j <= Math.min(rsiArr.length - 1, i + 2); j++) {
-    if (rsiArr[j] == null) continue;
-    if (v == null) { v = rsiArr[j]; continue; }
-    v = t === 'H' ? Math.max(v, rsiArr[j]) : Math.min(v, rsiArr[j]);
+  if (rsiArr[i] != null) return rsiArr[i];
+  for (let d = 1; d <= 1; d++) {
+    if (rsiArr[i - d] != null) return rsiArr[i - d];
+    if (rsiArr[i + d] != null) return rsiArr[i + d];
   }
-  return v;
+  return null;
 }
 
 // ---------- ตาราง 4 แบบ (ความลับ Divergence) ----------
@@ -106,7 +106,9 @@ function detectBearish(candles, opts = {}) {
     const range34 = H3.price - L4.price;
     if (range34 <= 0) continue;
     const divExt = ((H5.price - L4.price) / range34) * 100;
-    const divStrength = divExt >= 161.8 ? 'แรง' : divExt >= 138.2 ? 'ปานกลาง' : 'อ่อน';
+    // คู่มือ: Div ที่ใช้ได้ต้อง ≥138.2% (ตาราง 4 แบบมีแค่ 138.2% / 161.8%) — ต่ำกว่านี้ไม่เข้าเกณฑ์
+    if (divExt < 138.2) continue;
+    const divStrength = divExt >= 161.8 ? 'แรง' : 'ปานกลาง';
     const obos = r3 >= 70 && r5 >= 65; // โซน overbought ทั้งคู่ (ผ่อนเล็กน้อยที่จุดสอง)
 
     // ----- invalidate: ราคาปิดกลับขึ้นทะลุจุด (5) = wave count เสีย -----
