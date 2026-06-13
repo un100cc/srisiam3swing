@@ -191,8 +191,9 @@ function detectBearish(candles, opts = {}) {
     // ฝั่ง SHORT จริง (ราคาบวก) เป้าห้ามต่ำกว่า 0 — ฝั่ง LONG วิ่งบนราคา mirror (ติดลบ) ห้าม clamp
     const clampM3 = (v) => (anchor > 0 ? Math.max(v, 0) : v);
     const m3 = {
-      lo: round(clampM3(anchor - (exp.lo / 100) * m1Size)),
-      hi: round(clampM3(anchor - (exp.hi / 100) * m1Size)),
+      tp1: round(clampM3(anchor - 1.0 * m1Size)),         // 100 of A = TP ขั้นต่ำเสมอ (คู่มือหน้า 11)
+      lo: round(clampM3(anchor - (exp.lo / 100) * m1Size)), // ขอบใกล้ของโซนคาดหวังตามฟอร์ม
+      hi: round(clampM3(anchor - (exp.hi / 100) * m1Size)), // ขอบไกลของโซนคาดหวัง
       pctLo: exp.lo, pctHi: exp.hi, form: exp.form,
     };
 
@@ -219,8 +220,8 @@ function detectBearish(candles, opts = {}) {
     }
     // เลย M2 แล้ว กำลังวิ่งหา M3
     if (price < entryLo) {
-      const hit = price <= m3.lo;
-      return { ...ext, stage: hit ? 'M3' : 'RUN', stageInfo: hit ? '🎯 ถึงเป้า M3 ขั้นต่ำแล้ว' : 'กำลังวิ่งหา M3' };
+      const hit = price <= m3.tp1;
+      return { ...ext, stage: hit ? 'M3' : 'RUN', stageInfo: hit ? '🎯 ถึงเป้า M3 ขั้นต่ำ (100%) แล้ว' : 'กำลังวิ่งหา M3' };
     }
     return { ...ext, stage: 'CHOCH', stageInfo: 'retrace ลึกเกินโซน — ระวัง setup เสีย (เกิน 78.6%)' };
   }
@@ -248,7 +249,7 @@ function detectBullish(candles, opts) {
     internalLow: f(m.internalLow),
     m1: m.m1 ? { high: f(m.m1.low), low: f(m.m1.high), size: m.m1.size } : undefined,
     m2: m.m2 ? { high: f(m.m2.high), retracePct: m.m2.retracePct } : m.m2,
-    m3: m.m3 ? { ...m.m3, lo: f(m.m3.lo), hi: f(m.m3.hi) } : undefined,
+    m3: m.m3 ? { ...m.m3, tp1: f(m.m3.tp1), lo: f(m.m3.lo), hi: f(m.m3.hi) } : undefined,
     entryZone: m.entryZone ? { lo: f(m.entryZone.hi), hi: f(m.entryZone.lo), flip: f(m.entryZone.flip) } : undefined,
   };
 }

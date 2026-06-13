@@ -156,7 +156,8 @@ function card(r){
     rows += `<tr><td>M1 (สวิงแรกหลัง Choch)</td><td>${fmt(r.m1.low)} ↔ ${fmt(r.m1.high)}</td></tr>`;
     if(r.m2) rows += `<tr><td>M2 retrace</td><td class="${r.m2.retracePct<=38.2?'g':r.m2.retracePct<=50?'b':'r'}">${r.m2.retracePct}%</td></tr>`;
     rows += `<tr><td>โซน Entry (Fib 38.2–78.6)</td><td class="hl">${fmt(r.entryZone.lo)} – ${fmt(r.entryZone.hi)}</td></tr>`;
-    rows += `<tr><td>เป้า M3 (${r.m3.pctLo}–${r.m3.pctHi}% of M1)</td><td class="p">${fmt(r.m3.lo)} → ${fmt(r.m3.hi)}</td></tr>`;
+    rows += `<tr><td>🎯 TP1 ขั้นต่ำ (100% of M1)</td><td class="p">${fmt(r.m3.tp1)}</td></tr>`;
+    if(r.m3.hi !== r.m3.tp1) rows += `<tr><td>เป้าคาดหวัง (${r.m3.pctLo}–${r.m3.pctHi}%)</td><td class="p">${fmt(r.m3.lo)} → ${fmt(r.m3.hi)}</td></tr>`;
   }
   rows += `<tr><td>อายุ setup (แท่งจากจุด 5)</td><td>${r.barsSinceP5}</td></tr>`;
   return `<div class="card">
@@ -270,14 +271,16 @@ async function openChart(symbol){
       cs.createPriceLine({ price:a.entryZone.hi, color:'#d29922', lineWidth:1, lineStyle:2, title:'Entry 78.6%' });
     }
     // ----- เป้า M3 = horizontal line series (ขยายสเกลกราฟให้เห็นเสมอ ต่างจาก priceLine) -----
-    if(a.m3 && a.m3.lo != null){
+    if(a.m3 && a.m3.tp1 != null){
       const x0 = T(I.m2 != null ? I.m2 : (I.choch != null ? I.choch : I.p5));
       const x1 = T(lastI);
-      const m3lo = ln('#bc8cff',2,0); m3lo.setData([ {time:x0, value:a.m3.lo}, {time:x1, value:a.m3.lo} ]);
-      m3lo.createPriceLine({ price:a.m3.lo, color:'#bc8cff', lineWidth:1, lineStyle:0, title:`M3 ${a.m3.pctLo}%` });
-      if(a.m3.hi !== a.m3.lo){
-        const m3hi = ln('#bc8cff',1,2); m3hi.setData([ {time:x0, value:a.m3.hi}, {time:x1, value:a.m3.hi} ]);
-        m3hi.createPriceLine({ price:a.m3.hi, color:'#bc8cff', lineWidth:1, lineStyle:2, title:`M3 ${a.m3.pctHi}%` });
+      // TP1 ขั้นต่ำ 100% = เส้นหลัก ทึบหนา
+      const tp1 = ln('#bc8cff',2,0); tp1.setData([ {time:x0, value:a.m3.tp1}, {time:x1, value:a.m3.tp1} ]);
+      tp1.createPriceLine({ price:a.m3.tp1, color:'#bc8cff', lineWidth:1, lineStyle:0, title:`TP1 100% (ขั้นต่ำ)` });
+      // เป้าคาดหวังตามฟอร์ม = เส้นประจาง (เฉพาะถ้าลึกกว่า TP1)
+      if(a.m3.hi !== a.m3.tp1){
+        const m3hi = ln('#bc8cff55',1,2); m3hi.setData([ {time:x0, value:a.m3.hi}, {time:x1, value:a.m3.hi} ]);
+        m3hi.createPriceLine({ price:a.m3.hi, color:'#bc8cff55', lineWidth:1, lineStyle:2, title:`เป้า ${a.m3.pctHi}%` });
       }
     }
 
