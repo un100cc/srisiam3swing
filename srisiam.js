@@ -191,6 +191,8 @@ function detectBearish(candles, opts = {}) {
 
     const exp = m3Expectation(divExt, retracePct);
     const anchor = m2High != null ? m2High : L4.price; // จุด B ของ Fib Extension (0=จุด5, A=M1, B=M2)
+    // over-extended: สวิงแรก (5)→M1 ใหญ่จนเป้า 100% ทะลุ 0 (ฝั่ง SHORT จริงเท่านั้น) = เทรดไม่ได้ ทิ้ง
+    if (anchor > 0 && anchor - m1Size <= 0) continue;
     // ฝั่ง SHORT จริง (ราคาบวก) เป้าห้ามต่ำกว่า 0 — ฝั่ง LONG วิ่งบนราคา mirror (ติดลบ) ห้าม clamp
     const clampM3 = (v) => (anchor > 0 ? Math.max(v, 0) : v);
     const m3 = {

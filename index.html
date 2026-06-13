@@ -109,11 +109,13 @@
     <div id="chMain"></div>
     <div id="chRsi"></div>
     <div class="mlegend">
+      <span class="lg"><span class="sw" style="background:#26c6da"></span>EMA20</span>
+      <span class="lg"><span class="sw" style="background:#ffa726"></span>EMA50</span>
       <span class="lg"><span class="sw" style="background:#8b949e"></span>Trendline 2-4</span>
       <span class="lg"><span class="sw" style="background:#58a6ff"></span>Choch / Flip (จุด 4)</span>
-      <span class="lg"><span class="sw" style="background:#d29922"></span>โซน Entry 38.2–78.6%</span>
-      <span class="lg"><span class="sw" style="background:#bc8cff"></span>เป้า M3</span>
-      <span class="lg"><span class="sw" style="background:#f85149"></span>เส้น Divergence (ราคา + RSI)</span>
+      <span class="lg"><span class="sw" style="background:#f0a020"></span>Fib retrace (โซน Entry/POI)</span>
+      <span class="lg"><span class="sw" style="background:#bc8cff"></span>Fib ext (เป้า M3)</span>
+      <span class="lg"><span class="sw" style="background:#f85149"></span>Divergence (ราคา + RSI)</span>
     </div>
   </div>
 </div>
@@ -157,7 +159,11 @@ function card(r){
     if(r.m2) rows += `<tr><td>M2 retrace</td><td class="${r.m2.retracePct<=38.2?'g':r.m2.retracePct<=50?'b':'r'}">${r.m2.retracePct}%</td></tr>`;
     rows += `<tr><td>โซน Entry (Fib 38.2–78.6)</td><td class="hl">${fmt(r.entryZone.lo)} – ${fmt(r.entryZone.hi)}</td></tr>`;
     rows += `<tr><td>🎯 TP1 ขั้นต่ำ (100% of M1)</td><td class="p">${fmt(r.m3.tp1)}</td></tr>`;
-    if(r.m3.hi !== r.m3.tp1) rows += `<tr><td>เป้าคาดหวัง (${r.m3.pctLo}–${r.m3.pctHi}%)</td><td class="p">${fmt(r.m3.lo)} → ${fmt(r.m3.hi)}</td></tr>`;
+    // เป้าคาดหวังตามฟอร์ม — โชว์เฉพาะส่วนที่ >0 (สวิงแรกใหญ่อาจทำให้เป้าลึกทะลุ 0)
+    if(r.m3.hi > 0 && r.m3.hi !== r.m3.tp1)
+      rows += `<tr><td>เป้าคาดหวัง (${r.m3.pctLo}–${r.m3.pctHi}%)</td><td class="p">${fmt(r.m3.lo)} → ${fmt(r.m3.hi)}</td></tr>`;
+    else if(r.m3.lo > 0 && r.m3.lo !== r.m3.tp1)
+      rows += `<tr><td>เป้าคาดหวัง (${r.m3.pctLo}%)</td><td class="p">ถึง ${fmt(r.m3.lo)}</td></tr>`;
   }
   rows += `<tr><td>อายุ setup (แท่งจากจุด 5)</td><td>${r.barsSinceP5}</td></tr>`;
   return `<div class="card">
@@ -204,6 +210,7 @@ function destroyCharts(){
   document.getElementById('chMain').innerHTML = '';
   document.getElementById('chRsi').innerHTML = '';
 }
+function ema(vals, period){ const k=2/(period+1); let e=null; return vals.map(v=>{ e = e==null ? v : v*k + e*(1-k); return e; }); }
 function closeModal(){ document.getElementById('modal').classList.remove('open'); destroyCharts(); }
 document.getElementById('mClose').onclick = closeModal;
 document.getElementById('modal').onclick = e => { if(e.target.id==='modal') closeModal(); };
@@ -249,6 +256,11 @@ async function openChart(symbol){
   const cs = main.addCandlestickSeries({ upColor:'#3fb950', downColor:'#f85149', borderVisible:false, wickUpColor:'#3fb950', wickDownColor:'#f85149', priceFormat: pf });
   cs.setData(candles); charts.cs = cs;
 
+  // ----- EMA 20 / 50 (บอกเทรนด์ คล้าย CDC ActionZone) -----
+  const closes = candles.map(c => c.close);
+  const mkEma = (period, color) => { const e = ema(closes, period); const s = main.addLineSeries({ color, lineWidth:1, lastValueVisible:false, priceLineVisible:false, crosshairMarkerVisible:false, priceFormat: pf }); s.setData(e.map((v,i)=>({time:candles[i].time, value:v}))); };
+  mkEma(20, '#26c6da99'); mkEma(50, '#ffa72699');
+
   const rs = rsiCh.addLineSeries({ color:'#e6edf3', lineWidth:1, lastValueVisible:false, priceLineVisible:false });
   rs.setData(d.rsi.map((v,i) => v==null ? null : { time:candles[i].time, value:v }).filter(Boolean));
   rs.createPriceLine({ price:70, color:'#f8514966', lineWidth:1, lineStyle:2, title:'70' });
@@ -268,24 +280,33 @@ async function openChart(symbol){
     const dvr = rsiCh.addLineSeries({ color:'#f85149', lineWidth:2, lastValueVisible:false, priceLineVisible:false, crosshairMarkerVisible:false });
     dvr.setData([ {time:T(I.p3), value:a.rsi.r3}, {time:T(I.p5), value:a.rsi.r5} ]);
 
-    // ----- เส้นระดับ: Choch/Flip, Entry zone, M3 -----
-    cs.createPriceLine({ price:a.chochLevel, color:'#58a6ff', lineWidth:1, lineStyle:2, title:'Choch / Flip (4)' });
-    if(a.entryZone){
-      cs.createPriceLine({ price:a.entryZone.lo, color:'#d29922', lineWidth:1, lineStyle:2, title:'Entry 38.2%' });
-      cs.createPriceLine({ price:a.entryZone.hi, color:'#d29922', lineWidth:1, lineStyle:2, title:'Entry 78.6%' });
-    }
-    // ----- เป้า M3 = horizontal line series (ขยายสเกลกราฟให้เห็นเสมอ ต่างจาก priceLine) -----
-    if(a.m3 && a.m3.tp1 != null){
-      const x0 = T(I.m2 != null ? I.m2 : (I.choch != null ? I.choch : I.p5));
-      const x1 = T(lastI);
-      // TP1 ขั้นต่ำ 100% = เส้นหลัก ทึบหนา
-      const tp1 = ln('#bc8cff',2,0); tp1.setData([ {time:x0, value:a.m3.tp1}, {time:x1, value:a.m3.tp1} ]);
-      tp1.createPriceLine({ price:a.m3.tp1, color:'#bc8cff', lineWidth:1, lineStyle:0, title:`TP1 100% (ขั้นต่ำ)` });
-      // เป้าคาดหวังตามฟอร์ม = เส้นประจาง (เฉพาะถ้าลึกกว่า TP1)
-      if(a.m3.hi !== a.m3.tp1){
-        const m3hi = ln('#bc8cff55',1,2); m3hi.setData([ {time:x0, value:a.m3.hi}, {time:x1, value:a.m3.hi} ]);
-        m3hi.createPriceLine({ price:a.m3.hi, color:'#bc8cff55', lineWidth:1, lineStyle:2, title:`เป้า ${a.m3.pctHi}%` });
-      }
+    // ----- Choch / Flip (จุด 4) -----
+    cs.createPriceLine({ price:a.chochLevel, color:'#58a6ff', lineWidth:1, lineStyle:2, title:'Choch/Flip (4)' });
+
+    if(a.entryZone && a.m3 && a.m3.tp1 != null){
+      // fib แบบ side-agnostic: interpolate จากจุดที่ engine คำนวณมาแล้ว (ถูกต้องทั้ง LONG/SHORT)
+      const entryFib  = pct => a.entryZone.lo + (pct - 38.2) * (a.entryZone.hi - a.entryZone.lo) / (78.6 - 38.2);
+      const tSlope = a.m3.pctHi !== 100 ? (a.m3.hi - a.m3.tp1) / (a.m3.pctHi - 100) : 0; // ราคา/เปอร์เซ็นต์ จาก tp1→hi
+      const targetFib = pct => a.m3.tp1 + (pct - 100) * tSlope;
+      const x0 = T(I.m2 != null ? I.m2 : (I.choch != null ? I.choch : I.p5)), x1 = T(lastI);
+
+      // โซน POI / Entry — Fib retracement 38.2–78.6% (ส้ม)
+      [[38.2,'#f0a020'],[50,'#f0a02099'],[61.8,'#f0a02099'],[78.6,'#f0a020']].forEach(([pct,col])=>{
+        cs.createPriceLine({ price:entryFib(pct), color:col, lineWidth:1, lineStyle:2, title:`Fib ${pct}%` });
+      });
+
+      // เป้า M3 — Fib extension (ม่วง) เป็น line series ให้ autoscale เห็นเสมอ
+      const tgt = [[100,'#bc8cff',2,0,'TP1 100%'],[138.2,'#bc8cff99',1,2,'138.2%'],[161.8,'#bc8cff99',1,2,'161.8%'],[200,'#bc8cff66',1,2,'200%']];
+      const showDeep = a.m3.pctHi; // วาดลึกสุดถึงเป้าคาดหวังของฟอร์ม
+      tgt.forEach(([pct,col,w,st,lab])=>{
+        if(pct > Math.max(showDeep,100)) return;
+        const v = targetFib(pct); if(v <= 0) return;
+        const s = ln(col,w,st); s.setData([ {time:x0,value:v}, {time:x1,value:v} ]);
+        s.createPriceLine({ price:v, color:col, lineWidth:1, lineStyle:st, title:lab });
+      });
+    } else if(a.entryZone){
+      cs.createPriceLine({ price:a.entryZone.lo, color:'#f0a020', lineWidth:1, lineStyle:2, title:'Entry 38.2%' });
+      cs.createPriceLine({ price:a.entryZone.hi, color:'#f0a020', lineWidth:1, lineStyle:2, title:'Entry 78.6%' });
     }
 
     // ----- markers จุด (1)(2)(3)(4)(5) + M1/M2 -----
