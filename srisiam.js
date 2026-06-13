@@ -98,12 +98,20 @@ function detectBearish(candles, opts = {}) {
     if (!(L4.price > L2.price)) continue;                  // ต้องเป็น HL
     if (!(H5.price >= H3.price * 0.998)) continue;         // HH หรือ Equal High
 
+    // ----- แต่ละคลื่นต้องกินเวลาพอ (กันคลื่นจิ๋ว 1 แท่ง เช่น wave4 ที่เป็นแค่แท่งเดียว) -----
+    const minLeg = opts.minLeg ?? 3;
+    if (H3.i - L2.i < minLeg || L4.i - H3.i < minLeg || H5.i - L4.i < minLeg) continue;
+
     // ----- จุด (1) + กฎ Elliott impulse: (3)>(1) และ (4) ห้าม overlap (1) -----
     let P1 = null;
     for (const p of piv) if (p.t === 'H' && p.i < L2.i) P1 = p;
     if (!P1) continue;                                     // ต้องมีจุด (1) ยืนยันโครงสร้าง 5 คลื่น
+    if (L2.i - P1.i < minLeg) continue;                    // wave1 ((1)->(2)) ต้องกินเวลาพอ
     if (!(H3.price > P1.price)) continue;                  // wave3 ต้องสูงกว่า wave1
     if (!(L4.price > P1.price)) continue;                  // wave4 ห้าม overlap wave1 (non-overlap rule)
+    // wave3 ห้ามใหญ่ผิดสัดส่วนเทียบ wave1 (>8x = (1)(2) มักเป็น noise หลุดมาจากฐาน ไม่ใช่ wave1 จริง)
+    const w1 = P1.price - L2.price, w3 = H3.price - L2.price;
+    if (w1 > 0 && w3 / w1 > 8) continue;
 
     // ----- RSI Regular Bearish Divergence -----
     const r3 = rsiAt(r, H3.i, 'H'), r5 = rsiAt(r, H5.i, 'H');
