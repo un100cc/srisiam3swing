@@ -164,6 +164,12 @@ function card(r){
       rows += `<tr><td>เป้าคาดหวัง (${r.m3.pctLo}–${r.m3.pctHi}%)</td><td class="p">${fmt(r.m3.lo)} → ${fmt(r.m3.hi)}</td></tr>`;
     else if(r.m3.lo > 0 && r.m3.lo !== r.m3.tp1)
       rows += `<tr><td>เป้าคาดหวัง (${r.m3.pctLo}%)</td><td class="p">ถึง ${fmt(r.m3.lo)}</td></tr>`;
+    if(r.ppe) rows += `<tr><td>Post-Pattern Effect (0.786–0.886)</td><td>${fmt(r.ppe.lo)} – ${fmt(r.ppe.hi)}</td></tr>`;
+    if(r.m3q){
+      const gc = r.m3q.grade==='M3X'?'g':(r.m3q.grade==='SLOW'?'r':'b');
+      const gl = r.m3q.grade==='M3X'?'🚀 M3X เร็ว/แรง':(r.m3q.grade==='SLOW'?'🐢 อืด (พักตัว?)':'ปกติ');
+      rows += `<tr><td>คุณภาพ M3 (เทียบ M1)</td><td class="${gc}">${gl} ×${r.m3q.ratio}</td></tr>`;
+    }
   }
   rows += `<tr><td>อายุ setup (แท่งจากจุด 5)</td><td>${r.barsSinceP5}</td></tr>`;
   return `<div class="card">
@@ -282,6 +288,10 @@ async function openChart(symbol){
 
     // ----- Choch / Flip (จุด 4) -----
     cs.createPriceLine({ price:a.chochLevel, color:'#58a6ff', lineWidth:1, lineStyle:2, title:'Choch/Flip (4)' });
+    // ----- Post-Pattern Effect / invalidation zone (Fib 0.786–0.886) -----
+    if(a.ppe){
+      cs.createPriceLine({ price:a.ppe.hi, color:'#f85149aa', lineWidth:1, lineStyle:3, title:'PPE/Invalid 0.886' });
+    }
 
     if(a.entryZone && a.m3 && a.m3.tp1 != null){
       // fib แบบ side-agnostic: interpolate จากจุดที่ engine คำนวณมาแล้ว (ถูกต้องทั้ง LONG/SHORT)

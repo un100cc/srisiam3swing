@@ -207,28 +207,55 @@ function detectBearish(candles, opts = {}) {
     const entryHi = m1Low + 0.786 * m1Size;
     const inEntry = price >= entryLo && price <= entryHi;
 
+    // Post-Pattern Effect / invalidation zone = Fib 0.786–0.886 ของ M1 (คู่มือ/เคส: reaction zone หลัง pattern)
+    // ถ้าราคาเข้าโซนนี้หรือเกิน = retrace ลึกผิดปกติ → setup กลับตัวกำลังอ่อน/ใกล้ invalid
+    const ppe = { lo: round(m1Low + 0.786 * m1Size), hi: round(m1Low + 0.886 * m1Size) };
+
+    // ----- M3 speed/quality (M3X) : แยก "กลับตัวจริง (เร็วแรง)" จาก "พักตัวไปต่อ (อืด)" -----
+    // เทียบความเร็วขา M3 (M2→ปัจจุบัน) กับขา M1 ((5)→M1) — self-calibrating ไม่ใช้เลขมายากล
+    const m1Bars = Math.max(m1Idx - H5.i, 1);
+    const m1Vel = m1Size / m1Bars;
+    let m3q = null;
+    if (m2Idx != null) {
+      const m3Bars = Math.max((n - 1) - m2Idx, 1);
+      const m3Travel = anchor - price;                 // ระยะที่ M3 วิ่งไปทางเป้า (บวกเมื่อคืบหน้า ทั้ง SHORT/LONG-mirror)
+      const m3Vel = m3Travel / m3Bars;
+      const ratio = m1Vel > 0 ? m3Vel / m1Vel : 0;
+      m3q = {
+        ratio: round(ratio, 2),
+        grade: ratio >= 1 ? 'M3X' : ratio >= 0.5 ? 'M3' : 'SLOW',
+        bars: m3Bars,
+      };
+    }
+
     const ext = {
       ...base,
       idx: { ...base.idx, choch: chochExtIdx, m1: m1Idx, m2: m2Idx },
+      abc: { a: 'M1', b: 'M2', c: 'M3' },              // M1/M2/M3 = ABC correction (คู่มือหน้า 10,12)
       m1: { high: H5.price, low: m1Low, size: round(m1Size) },
       m2: m2High != null ? { high: m2High, retracePct: round(retracePct, 1) } : null,
-      m3,
+      m3, m3q, ppe,
       entryZone: { lo: round(entryLo), hi: round(entryHi), flip: L4.price },
       barsSinceChoch: n - 1 - chochExtIdx,
     };
 
     if (m2High == null || retracePct < 23.6) {
-      return { ...ext, stage: 'CHOCH', stageInfo: 'Choch (External) ปิดเต็มแท่งแล้ว — รอ retrace เข้าโซน entry' };
+      return { ...ext, stage: 'CHOCH', stageInfo: 'Choch (External) ปิดเต็มแท่งแล้ว — รอ retrace เข้าโซน entry (M1/=A เกิดแล้ว)' };
     }
     if (inEntry) {
-      return { ...ext, stage: 'ENTRY', stageInfo: '⚡ ราคาอยู่ในโซน entry (Fib 38.2–78.6% / Flip)' };
+      const near886 = price >= ppe.lo;
+      return { ...ext, stage: 'ENTRY', stageInfo: near886
+        ? '⚡ Entry แต่ลึกถึงโซน Post-Pattern Effect (0.786–0.886) — ระวัง invalid'
+        : '⚡ ราคาอยู่ในโซน entry (Fib 38.2–78.6% / Flip) — เข้าที่ M2/=B' };
     }
-    // เลย M2 แล้ว กำลังวิ่งหา M3
+    // เลย M2 แล้ว กำลังวิ่งหา M3/=C
     if (price < entryLo) {
       const hit = price <= m3.tp1;
-      return { ...ext, stage: hit ? 'M3' : 'RUN', stageInfo: hit ? '🎯 ถึงเป้า M3 ขั้นต่ำ (100%) แล้ว' : 'กำลังวิ่งหา M3' };
+      const qtag = m3q ? ` · ${m3q.grade === 'M3X' ? '🚀 M3X (เร็ว/แรง = กลับตัวจริง)' : m3q.grade === 'SLOW' ? '🐢 M3 อืด — ระวัง 3 สวิงพักตัวไปต่อ (invalid)' : 'M3 ปกติ'}` : '';
+      return { ...ext, stage: hit ? 'M3' : 'RUN', stageInfo: (hit ? '🎯 ถึงเป้า M3 ขั้นต่ำ (100%) แล้ว' : 'กำลังวิ่งหา M3/=C') + qtag };
     }
-    return { ...ext, stage: 'CHOCH', stageInfo: 'retrace ลึกเกินโซน — ระวัง setup เสีย (เกิน 78.6%)' };
+    // retrace เกิน 78.6% = เข้าโซน Post-Pattern Effect → จุด invalidation ที่ดี
+    return { ...ext, stage: 'CHOCH', stageInfo: '⚠️ retrace ลึกเกิน 78.6% เข้าโซน Post-Pattern Effect (0.786–0.886) — ใกล้ invalid, เฝ้าระวังพลิกเป็นพักตัวไปต่อ' };
   }
   return null;
 }
@@ -255,6 +282,8 @@ function detectBullish(candles, opts) {
     m1: m.m1 ? { high: f(m.m1.low), low: f(m.m1.high), size: m.m1.size } : undefined,
     m2: m.m2 ? { high: f(m.m2.high), retracePct: m.m2.retracePct } : m.m2,
     m3: m.m3 ? { ...m.m3, tp1: f(m.m3.tp1), lo: f(m.m3.lo), hi: f(m.m3.hi) } : undefined,
+    m3q: m.m3q,                                          // ratio/grade ไม่มีราคา ส่งผ่านได้เลย
+    ppe: m.ppe ? { lo: f(m.ppe.hi), hi: f(m.ppe.lo) } : undefined, // flip + สลับ lo/hi ให้ lo<hi
     entryZone: m.entryZone ? { lo: f(m.entryZone.hi), hi: f(m.entryZone.lo), flip: f(m.entryZone.flip) } : undefined,
   };
 }
