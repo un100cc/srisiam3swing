@@ -111,7 +111,7 @@ function detectBearish(candles, opts = {}) {
     if (!(L4.price > P1.price)) continue;                  // wave4 ห้าม overlap wave1 (non-overlap rule)
     // wave3 ห้ามใหญ่ผิดสัดส่วนเทียบ wave1 (>8x = (1)(2) มักเป็น noise หลุดมาจากฐาน ไม่ใช่ wave1 จริง)
     const w1 = P1.price - L2.price, w3 = H3.price - L2.price;
-    if (w1 > 0 && w3 / w1 > 8) continue;
+    if (w1 > 0 && w3 / w1 > 12) continue;
 
     // ----- RSI Regular Bearish Divergence -----
     const r3 = rsiAt(r, H3.i, 'H'), r5 = rsiAt(r, H5.i, 'H');
@@ -121,9 +121,10 @@ function detectBearish(candles, opts = {}) {
     const range34 = H3.price - L4.price;
     if (range34 <= 0) continue;
     const divExt = ((H5.price - L4.price) / range34) * 100;
-    // คู่มือ: Div ที่ใช้ได้ต้อง ≥138.2% (ตาราง 4 แบบมีแค่ 138.2% / 161.8%) — ต่ำกว่านี้ไม่เข้าเกณฑ์
-    if (divExt < 138.2) continue;
-    const divStrength = divExt >= 161.8 ? 'แรง' : 'ปานกลาง';
+    // คู่มือ: Div ≥138.2% = "ดี" (มีฟอร์มเป้าชัด) แต่ไม่ใช่บังคับ — ยอม Div อ่อนได้ (เป้า = 100% of M1)
+    // floor 100% = ต้องเป็น Higher High จริง (กัน noise); จัด 3 เกรดให้ผู้ใช้กรองเอง
+    if (divExt < 100) continue;
+    const divStrength = divExt >= 161.8 ? 'แรง' : divExt >= 138.2 ? 'ปานกลาง' : 'อ่อน';
     const obos = r3 >= 70 && r5 >= 65; // โซน overbought ทั้งคู่ (ผ่อนเล็กน้อยที่จุดสอง)
 
     // ----- invalidate: ราคาปิดกลับขึ้นทะลุจุด (5) = wave count เสีย -----

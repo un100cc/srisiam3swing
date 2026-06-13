@@ -95,6 +95,8 @@
   <span class="chip" data-f="DIV">Divergence</span>
   <span class="chip" data-f="LONG">LONG</span>
   <span class="chip" data-f="SHORT">SHORT</span>
+  <span class="chip" data-f="แรง">Div แรง</span>
+  <span class="chip" data-f="ปานกลาง+">Div ≥ ปานกลาง</span>
 </div>
 
 <div class="grid" id="grid"><div class="empty">กำลังสแกน…</div></div>
@@ -189,6 +191,8 @@ function render(){
   if(!DATA){ g.innerHTML = '<div class="empty">กำลังสแกน…</div>'; return; }
   let list = DATA.results;
   if(FILTER==='LONG'||FILTER==='SHORT') list = list.filter(r=>r.side===FILTER);
+  else if(FILTER==='แรง') list = list.filter(r=>r.divStrength==='แรง');
+  else if(FILTER==='ปานกลาง+') list = list.filter(r=>r.divStrength==='แรง'||r.divStrength==='ปานกลาง');
   else if(FILTER!=='ALL') list = list.filter(r=>r.stage===FILTER || (FILTER==='RUN'&&r.stage==='M3'));
   g.innerHTML = list.length ? list.map(card).join('') : '<div class="empty">ไม่พบ setup ในกลุ่มนี้</div>';
   document.getElementById('meta').textContent =
