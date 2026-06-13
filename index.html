@@ -237,12 +237,12 @@ async function openChart(symbol){
   };
   const main = LightweightCharts.createChart(document.getElementById('chMain'), baseOpts);
   const rsiCh = LightweightCharts.createChart(document.getElementById('chRsi'), baseOpts);
-  charts = { main, rsi: rsiCh };
+  charts = { main, rsi: rsiCh, cs: null };
 
   const candles = d.candles.map(c => ({ time: Math.floor(c.time/1000), open:c.open, high:c.high, low:c.low, close:c.close }));
   const T = i => candles[i].time;
   const cs = main.addCandlestickSeries({ upColor:'#3fb950', downColor:'#f85149', borderVisible:false, wickUpColor:'#3fb950', wickDownColor:'#f85149' });
-  cs.setData(candles);
+  cs.setData(candles); charts.cs = cs;
 
   const rs = rsiCh.addLineSeries({ color:'#e6edf3', lineWidth:1, lastValueVisible:false, priceLineVisible:false });
   rs.setData(d.rsi.map((v,i) => v==null ? null : { time:candles[i].time, value:v }).filter(Boolean));
@@ -269,31 +269,40 @@ async function openChart(symbol){
       cs.createPriceLine({ price:a.entryZone.lo, color:'#d29922', lineWidth:1, lineStyle:2, title:'Entry 38.2%' });
       cs.createPriceLine({ price:a.entryZone.hi, color:'#d29922', lineWidth:1, lineStyle:2, title:'Entry 78.6%' });
     }
-    if(a.m3){
-      cs.createPriceLine({ price:a.m3.lo, color:'#bc8cff', lineWidth:2, lineStyle:0, title:`M3 ${a.m3.pctLo}%` });
-      if(a.m3.hi !== a.m3.lo) cs.createPriceLine({ price:a.m3.hi, color:'#bc8cff', lineWidth:1, lineStyle:2, title:`M3 ${a.m3.pctHi}%` });
+    // ----- เป้า M3 = horizontal line series (ขยายสเกลกราฟให้เห็นเสมอ ต่างจาก priceLine) -----
+    if(a.m3 && a.m3.lo != null){
+      const x0 = T(I.m2 != null ? I.m2 : (I.choch != null ? I.choch : I.p5));
+      const x1 = T(lastI);
+      const m3lo = ln('#bc8cff',2,0); m3lo.setData([ {time:x0, value:a.m3.lo}, {time:x1, value:a.m3.lo} ]);
+      m3lo.createPriceLine({ price:a.m3.lo, color:'#bc8cff', lineWidth:1, lineStyle:0, title:`M3 ${a.m3.pctLo}%` });
+      if(a.m3.hi !== a.m3.lo){
+        const m3hi = ln('#bc8cff',1,2); m3hi.setData([ {time:x0, value:a.m3.hi}, {time:x1, value:a.m3.hi} ]);
+        m3hi.createPriceLine({ price:a.m3.hi, color:'#bc8cff', lineWidth:1, lineStyle:2, title:`M3 ${a.m3.pctHi}%` });
+      }
     }
 
-    // ----- markers จุด (2)(3)(4)(5) + M1/M2 -----
+    // ----- markers จุด (1)(2)(3)(4)(5) + M1/M2 -----
     const mk = (i,label,above,color='#d29922') => ({ time:T(i), position:above?'aboveBar':'belowBar', color, shape:above?'arrowDown':'arrowUp', text:label });
-    const markers = [
-      mk(I.p2,'(2)', !isShort), mk(I.p3,'(3)', isShort), mk(I.p4,'(4)', !isShort), mk(I.p5,'(5)', isShort),
-    ];
+    const markers = [];
+    if(I.p1 != null) markers.push(mk(I.p1,'(1)', isShort));
+    markers.push(mk(I.p2,'(2)', !isShort), mk(I.p3,'(3)', isShort), mk(I.p4,'(4)', !isShort), mk(I.p5,'(5)', isShort));
     if(I.m1 != null) markers.push(mk(I.m1,'M1', !isShort, '#bc8cff'));
     if(I.m2 != null) markers.push(mk(I.m2,'M2', isShort, '#bc8cff'));
     markers.sort((x,y) => x.time - y.time);
     cs.setMarkers(markers);
   }
 
-  // sync แกนเวลา 2 กราฟ
-  let syncing = false;
+  // sync แกนเวลา 2 กราฟ (เทียบค่าก่อน set กัน repaint loop จาก async event)
+  const near = (a,b) => a && b && Math.abs(a.from-b.from)<0.01 && Math.abs(a.to-b.to)<0.01;
   const sync = (from,to) => from.timeScale().subscribeVisibleLogicalRangeChange(r => {
-    if(syncing || !r) return; syncing = true; to.timeScale().setVisibleLogicalRange(r); syncing = false;
+    if(!r) return; const cur = to.timeScale().getVisibleLogicalRange();
+    if(!near(r,cur)) to.timeScale().setVisibleLogicalRange(r);
   });
   sync(main, rsiCh); sync(rsiCh, main);
   if(a && a.idx){
-    // zoom เข้าบริเวณ setup: ก่อนจุด (2) เล็กน้อย ถึงเลยแท่งสุดท้าย
-    main.timeScale().setVisibleLogicalRange({ from: Math.max(a.idx.p2 - 15, 0), to: candles.length + 8 });
+    // zoom เข้าบริเวณ setup: ก่อนจุด (1)/(2) เล็กน้อย ถึงเลยแท่งสุดท้าย
+    const startIdx = a.idx.p1 != null ? a.idx.p1 : a.idx.p2;
+    main.timeScale().setVisibleLogicalRange({ from: Math.max(startIdx - 10, 0), to: candles.length + 8 });
   } else {
     main.timeScale().fitContent();
   }

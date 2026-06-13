@@ -109,6 +109,15 @@ function detectBearish(candles, opts = {}) {
     const divStrength = divExt >= 161.8 ? 'แรง' : divExt >= 138.2 ? 'ปานกลาง' : 'อ่อน';
     const obos = r3 >= 70 && r5 >= 65; // โซน overbought ทั้งคู่ (ผ่อนเล็กน้อยที่จุดสอง)
 
+    // ----- invalidate: ราคาปิดกลับขึ้นทะลุจุด (5) = wave count เสีย -----
+    let reclaimed = false;
+    for (let i = H5.i + 1; i < n; i++) if (candles[i].close > H5.price * 1.001) { reclaimed = true; break; }
+    if (reclaimed) continue;
+
+    // ----- จุด (1) = pivot High ตัวสุดท้ายก่อนจุด (2) -----
+    let P1 = null;
+    for (const p of piv) if (p.t === 'H' && p.i < L2.i) P1 = p;
+
     // ----- Trend line 2-4 -----
     const slope = (L4.price - L2.price) / (L4.i - L2.i);
     const tlAt = (i) => L2.price + slope * (i - L2.i);
@@ -131,8 +140,8 @@ function detectBearish(candles, opts = {}) {
 
     const base = {
       side: 'SHORT',
-      points: { p2: L2.price, p3: H3.price, p4: L4.price, p5: H5.price, p5Idx: H5.i },
-      idx: { p2: L2.i, p3: H3.i, p4: L4.i, p5: H5.i },
+      points: { p1: P1 ? P1.price : null, p2: L2.price, p3: H3.price, p4: L4.price, p5: H5.price, p5Idx: H5.i },
+      idx: { p1: P1 ? P1.i : null, p2: L2.i, p3: H3.i, p4: L4.i, p5: H5.i },
       rsi: { r3: round(r3, 1), r5: round(r5, 1), obos },
       divExt: round(divExt, 1), divStrength,
       trendlineNow: round(tlAt(n - 1)),
@@ -155,15 +164,23 @@ function detectBearish(candles, opts = {}) {
     }
 
     // ----- หลัง Choch (External): M1 / M2 / M3 -----
-    // M1 = สวิงลงแรก: low ต่ำสุดหลังจุด (5)
-    let m1Idx = chochExtIdx, m1Low = candles[chochExtIdx].low;
-    for (let i = chochExtIdx; i < n; i++) if (candles[i].low < m1Low) { m1Low = candles[i].low; m1Idx = i; }
+    // M1 = สวิงลงแรก = pivot low ตัวแรกตั้งแต่จุด Choch (ไม่ใช่ low ต่ำสุดทั้งหมด)
+    let m1Idx = null, m1Low = null;
+    for (const p of piv) if (p.t === 'L' && p.i >= chochExtIdx) { m1Idx = p.i; m1Low = p.price; break; }
+    // ยังไม่เกิด pivot low (สวิงแรกกำลังก่อตัว) — ใช้ low ต่ำสุดชั่วคราว, ยังไม่มี M2
+    let m1Provisional = false;
+    if (m1Idx == null) {
+      m1Provisional = true; m1Idx = chochExtIdx; m1Low = candles[chochExtIdx].low;
+      for (let i = chochExtIdx; i < n; i++) if (candles[i].low < m1Low) { m1Low = candles[i].low; m1Idx = i; }
+    }
     const m1Size = H5.price - m1Low;
     if (m1Size <= 0) continue;
 
-    // M2 = retrace สูงสุดหลัง M1
+    // M2 = retrace = pivot high ตัวแรกหลัง M1
     let m2High = null, m2Idx = null;
-    for (let i = m1Idx + 1; i < n; i++) if (m2High == null || candles[i].high > m2High) { m2High = candles[i].high; m2Idx = i; }
+    if (!m1Provisional) {
+      for (const p of piv) if (p.t === 'H' && p.i > m1Idx) { m2Idx = p.i; m2High = p.price; break; }
+    }
     const retracePct = m2High != null ? ((m2High - m1Low) / m1Size) * 100 : null;
     if (retracePct != null && retracePct > 100) continue; // retrace ทะลุจุด (5) = โครงสร้างกลับตัวเสียแล้ว
 
@@ -222,7 +239,7 @@ function detectBullish(candles, opts) {
     ...m,
     side: 'LONG',
     price: f(m.price),
-    points: { p2: f(m.points.p2), p3: f(m.points.p3), p4: f(m.points.p4), p5: f(m.points.p5), p5Idx: m.points.p5Idx },
+    points: { p1: f(m.points.p1), p2: f(m.points.p2), p3: f(m.points.p3), p4: f(m.points.p4), p5: f(m.points.p5), p5Idx: m.points.p5Idx },
     rsi: { r3: round(100 - m.rsi.r3, 1), r5: round(100 - m.rsi.r5, 1), obos: m.rsi.obos },
     trendlineNow: f(m.trendlineNow),
     chochLevel: f(m.chochLevel),
