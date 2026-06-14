@@ -318,4 +318,69 @@ function analyze(candles, opts = {}) {
   return bear || bull;
 }
 
-module.exports = { analyze, detectBearish, detectBullish, rsi, findPivots, zigzag, m3Expectation };
+// ============ โหมด CONTINUATION / PULLBACK (เข้าตามเทรนด์เดิม) ============
+function emaArr(vals, period) {
+  const k = 2 / (period + 1); let e = null; const out = [];
+  for (const v of vals) { e = e == null ? v : v * k + e * (1 - k); out.push(e); }
+  return out;
+}
+
+// uptrend continuation (LONG): EMA20>EMA50 + HH+HL + ราคาย่อเข้า value zone (Fib 38.2-61.8 ≈ EMA zone) แล้วไปต่อ
+function contUp(candles, opts = {}) {
+  const n = candles.length;
+  if (n < 60) return null;
+  const closes = candles.map(c => c.close);
+  const e20 = emaArr(closes, 20), e50 = emaArr(closes, 50);
+  if (!(e20[n - 1] > e50[n - 1])) return null;                 // เทรนด์ขึ้น (CDC ActionZone เขียว)
+  const piv = findPivots(candles, opts.pivotL ?? 4, opts.pivotR ?? 4);
+  const z = zigzag(piv);
+  let hidx = -1;
+  for (let k = z.length - 1; k >= 3; k--) { if (z[k].t === 'H') { hidx = k; break; } }
+  if (hidx < 3) return null;
+  const hi = z[hidx], lo = z[hidx - 1], prevH = z[hidx - 2], prevL = z[hidx - 3];
+  if (lo.t !== 'L' || prevH.t !== 'H' || prevL.t !== 'L') return null;
+  if (!(hi.price > prevH.price && lo.price > prevL.price)) return null;  // HH + HL = uptrend จริง
+  if (n - 1 - hi.i > (opts.maxAgeBars ?? 60)) return null;               // peak ไม่เก่าเกิน
+  const leg = hi.price - lo.price; if (leg <= 0) return null;
+  const price = candles[n - 1].close;
+  if (price <= lo.price) return null;                          // หลุด HL = เทรนด์เสีย
+  const pull = (hi.price - price) / leg;                       // 0=peak, 1=legstart
+  const zoneLo = hi.price - 0.618 * leg, zoneHi = hi.price - 0.382 * leg;
+  const slLevel = hi.price - 0.786 * leg;                      // หลุด 78.6% = continuation fail
+  const tp1 = hi.price + 0.272 * leg, tp2 = hi.price + 0.618 * leg;
+  let stage;
+  if (price > hi.price) stage = 'CONT_RUN';                    // ทะลุ peak แล้ว วิ่งต่อ
+  else if (pull < 0.236) stage = 'CONT_WAIT';                  // ยังไม่ย่อพอ
+  else if (price >= zoneLo && price <= zoneHi) stage = 'CONT_ENTRY'; // อยู่ในโซนเข้า
+  else if (pull > 0.786) return null;                          // ย่อลึกเกิน ใกล้เสีย ทิ้ง
+  else stage = 'CONT_PB';                                      // ย่ออยู่ระหว่างทาง
+  const emaInZone = e20[n - 1] <= zoneHi && e20[n - 1] >= slLevel;
+  return {
+    mode: 'CONT', side: 'LONG', stage,
+    points: { start: lo.price, peak: hi.price, startIdx: lo.i, peakIdx: hi.i, p5Idx: hi.i },
+    leg: round(leg), pullPct: round(pull * 100, 1),
+    entryZone: { lo: round(zoneLo), hi: round(zoneHi) },
+    sl: round(slLevel), tp1: round(tp1), tp2: round(tp2),
+    emaInZone, price, barsSincePeak: n - 1 - hi.i,
+  };
+}
+
+function flipCont(m) {
+  if (!m) return null;
+  const f = (v) => v == null ? null : round(-v);
+  return {
+    ...m, side: 'SHORT', price: f(m.price),
+    points: { start: f(m.points.start), peak: f(m.points.peak), startIdx: m.points.startIdx, peakIdx: m.points.peakIdx, p5Idx: m.points.p5Idx },
+    entryZone: { lo: f(m.entryZone.hi), hi: f(m.entryZone.lo) },
+    sl: f(m.sl), tp1: f(m.tp1), tp2: f(m.tp2),
+  };
+}
+
+function detectContinuation(candles, opts = {}) {
+  const up = contUp(candles, opts);
+  const down = flipCont(contUp(mirror(candles), opts));
+  if (up && down) return up.barsSincePeak <= down.barsSincePeak ? up : down;
+  return up || down;
+}
+
+module.exports = { analyze, detectContinuation, detectBearish, detectBullish, rsi, findPivots, zigzag, m3Expectation, emaArr };

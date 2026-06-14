@@ -37,6 +37,7 @@
   .stage.BREAK{background:#ff7b7226;color:var(--pink)}
   .stage.DIV{background:#8b949e26;color:var(--dim)}
   .stage.M3{background:#3fb95026;color:var(--green)}
+  .stage.CONT{background:#26c6da26;color:#26c6da}
   .info{font-size:12px;color:var(--dim);margin-bottom:8px;line-height:1.5}
   table.kv{width:100%;font-size:12px;border-collapse:collapse}
   table.kv td{padding:2px 0;color:var(--dim)}
@@ -97,6 +98,9 @@
   <span class="chip" data-f="SHORT">SHORT</span>
   <span class="chip" data-f="แรง">Div แรง</span>
   <span class="chip" data-f="ปานกลาง+">Div ≥ ปานกลาง</span>
+  <span class="chip" data-f="REV">↩️ Reversal</span>
+  <span class="chip" data-f="CONT">📈 Continuation</span>
+  <span class="chip" data-f="CONT_ENTRY">⚡ PB Entry</span>
 </div>
 
 <div class="grid" id="grid"><div class="empty">กำลังสแกน…</div></div>
@@ -141,10 +145,36 @@ function fmt(v){
   return v.toPrecision(4);
 }
 function stageTH(s){
-  return {ENTRY:'⚡ ENTRY',CHOCH:'CHOCH ✓',RUN:'RUN → M3',BREAK:'BREAK TL',DIV:'DIV',M3:'🎯 M3'}[s]||s;
+  return {ENTRY:'⚡ ENTRY',CHOCH:'CHOCH ✓',RUN:'RUN → M3',BREAK:'BREAK TL',DIV:'DIV',M3:'🎯 M3',
+    CONT_ENTRY:'⚡ PB ENTRY',CONT_PB:'ย่ออยู่',CONT_WAIT:'รอย่อ',CONT_RUN:'วิ่งต่อ'}[s]||s;
+}
+
+function contCard(r){
+  const dirIcon = r.side==='LONG'?'🟢':'🔴';
+  const trendTxt = r.side==='LONG'?'ขาขึ้น (buy dip)':'ขาลง (sell rally)';
+  let rows = `
+    <tr><td>ราคา</td><td>${fmt(r.price)} <span class="${r.change24h>=0?'g':'r'}">(${r.change24h>0?'+':''}${r.change24h?.toFixed(1)}%)</span></td></tr>
+    <tr><td>เทรนด์ (EMA20/50)</td><td>${trendTxt}</td></tr>
+    <tr><td>สวิงล่าสุด (start ↔ peak)</td><td>${fmt(r.points.start)} ↔ ${fmt(r.points.peak)}</td></tr>
+    <tr><td>ย่อแล้ว</td><td class="${r.pullPct<=38.2?'b':r.pullPct<=61.8?'g':'r'}">${r.pullPct}%</td></tr>
+    <tr><td>โซน Entry (Fib 38.2–61.8${r.emaInZone?' · ตรง EMA ✓':''})</td><td class="hl">${fmt(r.entryZone.lo)} – ${fmt(r.entryZone.hi)}</td></tr>
+    <tr><td>🛑 SL (ใต้ 78.6%)</td><td class="r">${fmt(r.sl)}</td></tr>
+    <tr><td>🎯 TP1 / TP2</td><td class="p">${fmt(r.tp1)} → ${fmt(r.tp2)}</td></tr>
+    <tr><td>อายุ (แท่งจาก peak)</td><td>${r.barsSincePeak}</td></tr>`;
+  return `<div class="card">
+    <div class="top">
+      <span class="sym">${dirIcon} <a href="${r.tv}" target="_blank">${r.symbol.replace('USDT','')}</a></span>
+      <button class="chartbtn" onclick="openChart('${r.symbol}')">📈 กราฟ</button>
+      <span class="side ${r.side}">${r.side}</span>
+      <span class="stage ${r.stage.startsWith('CONT')?'CONT':r.stage}">CONT · ${stageTH(r.stage)}</span>
+    </div>
+    <div class="info">📈 Continuation (ตามเทรนด์) — ย่อเข้าโซน Fib/EMA แล้วไปต่อ</div>
+    <table class="kv">${rows}</table>
+  </div>`;
 }
 
 function card(r){
+  if(r.mode==='CONT') return contCard(r);
   const dirIcon = r.side==='LONG'?'🟢':'🔴';
   const divCls = r.divStrength==='แรง'?'g':(r.divStrength==='ปานกลาง'?'b':'');
   let rows = `
@@ -193,6 +223,8 @@ function render(){
   if(FILTER==='LONG'||FILTER==='SHORT') list = list.filter(r=>r.side===FILTER);
   else if(FILTER==='แรง') list = list.filter(r=>r.divStrength==='แรง');
   else if(FILTER==='ปานกลาง+') list = list.filter(r=>r.divStrength==='แรง'||r.divStrength==='ปานกลาง');
+  else if(FILTER==='REV') list = list.filter(r=>r.mode==='REV');
+  else if(FILTER==='CONT') list = list.filter(r=>r.mode==='CONT');
   else if(FILTER!=='ALL') list = list.filter(r=>r.stage===FILTER || (FILTER==='RUN'&&r.stage==='M3'));
   g.innerHTML = list.length ? list.map(card).join('') : '<div class="empty">ไม่พบ setup ในกลุ่มนี้</div>';
   document.getElementById('meta').textContent =
@@ -242,8 +274,11 @@ async function openChart(symbol){
     return;
   }
   const a = d.analysis;
+  const ct = d.continuation;
   document.getElementById('mSub').textContent = a
     ? `${a.side} · Div ${a.divExt}% (${a.divStrength}) · ${a.stageInfo}`
+    : ct
+    ? `📈 Continuation ${ct.side} · ${stageTH(ct.stage)} · ย่อ ${ct.pullPct}% (เทรนด์ ${ct.side==='LONG'?'ขึ้น':'ลง'})`
     : 'ไม่พบ setup ตามกลยุทธ์ในตอนนี้';
 
   const baseOpts = {
@@ -332,6 +367,22 @@ async function openChart(symbol){
     if(I.m2 != null) markers.push(mk(I.m2,'M2', isShort, '#bc8cff'));
     markers.sort((x,y) => x.time - y.time);
     cs.setMarkers(markers);
+  } else if(ct){
+    // ----- โหมด Continuation: วาดโซน entry / SL / TP + จุด start/peak -----
+    const lnc = (color,width,style) => main.addLineSeries({ color, lineWidth:width, lineStyle:style, lastValueVisible:false, priceLineVisible:false, crosshairMarkerVisible:false, priceFormat: pf });
+    cs.createPriceLine({ price:ct.entryZone.lo, color:'#f0a020', lineWidth:1, lineStyle:2, title:'Entry 61.8%' });
+    cs.createPriceLine({ price:ct.entryZone.hi, color:'#f0a020', lineWidth:1, lineStyle:2, title:'Entry 38.2%' });
+    cs.createPriceLine({ price:ct.sl, color:'#f85149', lineWidth:1, lineStyle:2, title:'🛑 SL 78.6%' });
+    const x1=T(candles.length-1), x0=T(ct.points.peakIdx);
+    [[ct.tp1,'#26c6da','TP1'],[ct.tp2,'#26c6da99','TP2']].forEach(([v,col,lab])=>{
+      const s=lnc(col,2,0); s.setData([{time:x0,value:v},{time:x1,value:v}]);
+      s.createPriceLine({ price:v, color:col, lineWidth:1, lineStyle:0, title:lab });
+    });
+    const isShortC = ct.side==='SHORT';
+    cs.setMarkers([
+      { time:T(ct.points.startIdx), position:isShortC?'aboveBar':'belowBar', color:'#26c6da', shape:isShortC?'arrowDown':'arrowUp', text:'start' },
+      { time:T(ct.points.peakIdx), position:isShortC?'belowBar':'aboveBar', color:'#26c6da', shape:isShortC?'arrowUp':'arrowDown', text:'peak' },
+    ].sort((a,b)=>a.time-b.time));
   }
 
   // sync แกนเวลา 2 กราฟ (เทียบค่าก่อน set กัน repaint loop จาก async event)
@@ -345,6 +396,8 @@ async function openChart(symbol){
     // zoom เข้าบริเวณ setup: ก่อนจุด (1)/(2) เล็กน้อย ถึงเลยแท่งสุดท้าย
     const startIdx = a.idx.p1 != null ? a.idx.p1 : a.idx.p2;
     main.timeScale().setVisibleLogicalRange({ from: Math.max(startIdx - 10, 0), to: candles.length + 8 });
+  } else if(ct){
+    main.timeScale().setVisibleLogicalRange({ from: Math.max(ct.points.startIdx - 10, 0), to: candles.length + 8 });
   } else {
     main.timeScale().fitContent();
   }

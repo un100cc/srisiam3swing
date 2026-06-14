@@ -3,7 +3,7 @@
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
-const { analyze, rsi } = require('./srisiam');
+const { analyze, detectContinuation, rsi } = require('./srisiam');
 
 const PORT = 3100;
 const BINANCE = 'https://api.binance.com';
@@ -66,19 +66,19 @@ async function scan(tf = '4h', top = 50) {
   const hit = getCache(key, 60 * 1000);
   if (hit) return hit;
   const syms = await topSymbols(top);
-  const results = await mapLimit(syms, 8, async (s) => {
+  const nested = await mapLimit(syms, 8, async (s) => {
     const c = await klines(s.symbol, tf);
-    const r = analyze(c);
-    if (!r) return null;
-    return {
-      symbol: s.symbol, change24h: s.change,
-      tv: `https://www.tradingview.com/chart/?symbol=BINANCE:${s.symbol}&interval=${TV_INTERVAL[tf] || '240'}`,
-      ...r,
-    };
+    const tv = `https://www.tradingview.com/chart/?symbol=BINANCE:${s.symbol}&interval=${TV_INTERVAL[tf] || '240'}`;
+    const out = [];
+    const rev = analyze(c);
+    if (rev) out.push({ symbol: s.symbol, change24h: s.change, tv, mode: 'REV', ...rev });
+    const cont = detectContinuation(c);
+    if (cont) out.push({ symbol: s.symbol, change24h: s.change, tv, ...cont });
+    return out;
   });
-  const found = results.filter(r => r && !r.error);
-  const order = { ENTRY: 0, CHOCH: 1, RUN: 2, BREAK: 3, DIV: 4, M3: 5 };
-  found.sort((a, b) => (order[a.stage] ?? 9) - (order[b.stage] ?? 9) || b.divExt - a.divExt || a.barsSinceP5 - b.barsSinceP5);
+  const found = nested.flat().filter(r => r && !r.error);
+  const order = { ENTRY: 0, CONT_ENTRY: 0, CHOCH: 1, CONT_PB: 1, RUN: 2, CONT_RUN: 2, BREAK: 3, CONT_WAIT: 3, DIV: 4, M3: 5 };
+  found.sort((a, b) => (order[a.stage] ?? 9) - (order[b.stage] ?? 9) || (b.divExt || 0) - (a.divExt || 0));
   const payload = { time: Date.now(), tf, scanned: syms.length, found: found.length, results: found };
   setCache(key, payload);
   return payload;
@@ -107,7 +107,7 @@ const server = http.createServer(async (req, res) => {
       const tf = url.searchParams.get('tf') || '4h';
       if (!/^[A-Z0-9]{2,20}USDT$/.test(symbol) || !TV_INTERVAL[tf]) { res.writeHead(400); res.end('bad params'); return; }
       const c = await klines(symbol, tf);
-      const data = { symbol, tf, candles: c, rsi: rsi(c.map(x => x.close), 14), analysis: analyze(c) };
+      const data = { symbol, tf, candles: c, rsi: rsi(c.map(x => x.close), 14), analysis: analyze(c), continuation: detectContinuation(c) };
       res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
       res.end(JSON.stringify(data));
       return;
